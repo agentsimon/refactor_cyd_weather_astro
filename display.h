@@ -96,7 +96,7 @@ void drawMenu() {
 
     tft.setTextSize(2);
     tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
-    tft.setCursor(16, 90);
+    tft.setCursor(15, 76);
     tft.printf("%02d:%02d  %02d-%02d-%04d",
                 localTm.tm_hour, localTm.tm_min,
                 localTm.tm_mday, localTm.tm_mon + 1, localTm.tm_year + 1900);
@@ -245,16 +245,16 @@ void drawCurrentConditions() {
   tft.setTextSize(2);
   tft.setTextColor(TFT_CYAN, TFT_BLACK);
   tft.setCursor(20, 90);
-  tft.printf("Humidity(calc):%.0f %%", currentHumidity);
+  tft.printf("%-10s%.0f %%", "Humidity:", currentHumidity);
 
   tft.setCursor(20, 115);
-  tft.printf("Rain:         %s", currentRainCode.c_str());
+  tft.printf("%-10s%s", "Rain:", currentRainCode.c_str());
 
   tft.setCursor(20, 140);
-  tft.printf("Pressure:     %.0f hPa", currentPressure);
+  tft.printf("%-10s%.0f hPa", "Pressure:", currentPressure);
 
   tft.setCursor(20, 165);
-  tft.printf("Wind:         %.1f km/h", currentWindSpeed);
+  tft.printf("%-10s%.1f km/h", "Wind:", currentWindSpeed);
 
   // Current time at the bottom of the screen - the board's NTP clock,
   // converted from UTC to Da Nang local time using the offset from
@@ -270,9 +270,9 @@ if (getLocalTime(&timeinfo, 200)) {
   tft.setTextSize(1);
   tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
   tft.setCursor(20, 218);
-  // tft.printf("Time: %02d:%02d %02d-%02d-%04d",
-   //           localTm.tm_hour, localTm.tm_min,
-   //           localTm.tm_mday, localTm.tm_mon + 1, localTm.tm_year + 1900);
+  tft.printf("Time: %02d:%02d %02d-%02d-%04d",
+              localTm.tm_hour, localTm.tm_min,
+              localTm.tm_mday, localTm.tm_mon + 1, localTm.tm_year + 1900);
 }
 
   drawWeatherIcon(265, 60, 40, currentWeatherIcon);
