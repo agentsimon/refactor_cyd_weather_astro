@@ -1,35 +1,39 @@
-#pragma once
+#ifndef SECRETS_H
+#define SECRETS_H
 
-// --- WiFi credentials ---
-//#define WIFI_SSID      "SSID"
-//#define WIFI_PASSWORD  "Password"
+// ---------- METAR STATION ----------
+// One-time default used only on first boot. After that, whatever is
+// saved via the on-board web form (http://<board-ip>/) takes over.
+#define DEFAULT_METAR_STATION "VVDN"   // Da Nang Airport ICAO code
 
-// --- OpenWeatherMap ---
-// Get a free API key at https://openweathermap.org/api
-// (the free "5 day / 3 hour forecast" tier is all this sketch needs)
-//#define WEATHER_API_KEY "FDIJASEDRYOZUB0S"
+// User-Agent required by the aviationweather.gov API.
+#define API_USER_AGENT "CYD-Weather-Display/1.0 (your_email@example.com)"
 
-// --- Location (defaults to Da Nang, Vietnam) ---
-#define WEATHER_LAT "16.0544"
-#define WEATHER_LON "108.2022"
+// ---------- Location (for the Open-Meteo rain history graph) ----------
+// Open-Meteo needs coordinates, not an ICAO code - these default to
+// Da Nang Airport (VVDN). Update if you move the METAR station.
+#define WEATHER_LAT "16.0439"
+#define WEATHER_LON "108.1994"
 
-// --- FreeAstroAPI (Ephemeris) ---
-// Get a free API key at https://www.freeastroapi.com/login
+// ---------- EPHEMERIS (FreeAstroAPI) ----------
+// https://www.freeastroapi.com - sign up for a key.
 #define EPHEMERIS_API_KEY "Your_key"
 
-// --- Kite Wind Alert (email via Gmail SMTP) ---
-// EMAIL_SENDER_PASSWORD must be a Gmail App Password, NOT your normal
-// account password - create one at https://myaccount.google.com/apppasswords
-// (requires 2-Step Verification to be enabled on the Gmail account).
-#define EMAIL_SENDER_ACCOUNT  "Your_emaol
-#define EMAIL_SENDER_PASSWORD "Your_psswd"
-#define EMAIL_RECIPIENT       "The_email"
+// ---------- KITE WIND ALERT (email via Gmail SMTP) ----------
+// Use a Gmail App Password, not your normal account password:
+// https://myaccount.google.com/apppasswords
+#define EMAIL_SENDER_ACCOUNT  "email_address"
+#define EMAIL_SENDER_PASSWORD "your_password"
+#define EMAIL_RECIPIENT       "email_address"
 
-// Only check wind speed / send an alert during this local-time window
-// each day, checked roughly every 30 min (however often the normal
-// weather refresh runs). All values in minutes, 24h clock.
-// Local timezone offset from UTC (the board's clock is kept in UTC -
-// Da Nang, Vietnam is UTC+7, no DST).
+
+// Da Nang is UTC+7 -> offset in minutes, used to convert the board's
+// UTC clock to local time for the alert window check below.
 #define DANANG_UTC_OFFSET_MIN (7 * 60)
-#define KITE_WINDOW_START_MIN 990   // 16:30
-#define KITE_WINDOW_END_MIN   1110  // 18:30
+
+// Alert window in LOCAL (Da Nang) minutes-of-day.
+// Example: 6:00 AM - 6:00 PM
+#define KITE_WINDOW_START_MIN (6 * 60)
+#define KITE_WINDOW_END_MIN   (18 * 60)
+
+#endif // SECRETS_H
