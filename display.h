@@ -25,6 +25,7 @@ void drawFogLines(int cx, int cy, int size);
 void drawLightningBolt(int cx, int cy, int size);
 void drawEphemeris();
 void drawCurrentConditions();
+void drawHistoryGraph();
 
 void screenTest() {
   Serial.println("=== Screen self-test ===");
@@ -137,10 +138,25 @@ void selectMenuRow(int row) {
 // Dispatches to the right draw function for whatever currentScreen is
 void redrawCurrentScreen() {
   switch (currentScreen) {
-    case SCREEN_EPHEMERIS: drawEphemeris();            break;
-    case SCREEN_CURRENT:   drawCurrentConditions();    break;
-    case SCREEN_MENU:      drawMenu();                 break;
+    case SCREEN_EPHEMERIS: drawEphemeris();         break;
+    case SCREEN_CURRENT:   drawCurrentConditions(); break;
+    case SCREEN_HISTORY:   drawHistoryGraph();      break;
+    case SCREEN_MENU:      drawMenu();              break;
   }
+}
+
+// Maps a touch Y coordinate to whichever of the Humidity/Rain/Pressure/
+// Wind rows on the Current Conditions screen it falls within. Each row
+// is now 30px apart (see drawCurrentConditions) with a small gap left
+// between bands so an imprecise tap near a boundary falls through to
+// "touch anywhere to go back to the menu" instead of picking the wrong
+// row.
+bool getTappedHistoryRow(uint16_t y, HistoryMetric &outMetric) {
+  if (y >= 80  && y <= 108) { outMetric = HISTORY_HUMIDITY; return true; }
+  if (y >= 112 && y <= 138) { outMetric = HISTORY_RAIN;     return true; }
+  if (y >= 142 && y <= 168) { outMetric = HISTORY_PRESSURE; return true; }
+  if (y >= 172 && y <= 198) { outMetric = HISTORY_WIND;     return true; }
+  return false;
 }
 
 void drawEphemeris() {
@@ -247,35 +263,114 @@ void drawCurrentConditions() {
   tft.setCursor(20, 90);
   tft.printf("%-10s%.0f %%", "Humidity:", currentHumidity);
 
-  tft.setCursor(20, 115);
+  tft.setCursor(20, 120);
   tft.printf("%-10s%s", "Rain:", currentRainCode.c_str());
 
-  tft.setCursor(20, 140);
+  tft.setCursor(20, 150);
   tft.printf("%-10s%.0f hPa", "Pressure:", currentPressure);
 
-  tft.setCursor(20, 165);
+  tft.setCursor(20, 180);
   tft.printf("%-10s%.1f km/h", "Wind:", currentWindSpeed);
 
-  // Current time at the bottom of the screen - the board's NTP clock,
-  // converted from UTC to Da Nang local time using the offset from
-  // secrets.h. Reflects the moment this screen was drawn/refreshed,
-  // not a live-ticking clock (the screen doesn't redraw every second).
-struct tm timeinfo;
-if (getLocalTime(&timeinfo, 200)) {
-  time_t utcEpoch = mktime(&timeinfo);
-  time_t localEpoch = utcEpoch + (time_t)DANANG_UTC_OFFSET_MIN * 60;
-  struct tm localTm;
-  gmtime_r(&localEpoch, &localTm);
-
-  tft.setTextSize(1);
-  tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
-  tft.setCursor(20, 218);
-  tft.printf("Time: %02d:%02d %02d-%02d-%04d",
-              localTm.tm_hour, localTm.tm_min,
-              localTm.tm_mday, localTm.tm_mon + 1, localTm.tm_year + 1900);
+  drawWeatherIcon(265, 60, 40, currentWeatherIcon);
 }
 
-  drawWeatherIcon(265, 60, 40, currentWeatherIcon);
+// -----------------------------------------------------------------
+// Point/line graph of whichever stat selectedHistoryMetric names, over
+// the last WEATHER_HISTORY_HOURS hours, from Open-Meteo. One point per
+// hour, oldest to most recent, left to right, connected by lines. The
+// Y axis auto-scales to the data's own min/max (with a little padding)
+// rather than always starting at 0 - pressure in particular moves in a
+// narrow band (e.g. 1008-1014 hPa), so a 0-based axis would flatten it
+// to a nearly invisible line.
+// -----------------------------------------------------------------
+void drawHistoryGraph() {
+  tft.fillScreen(TFT_BLACK);
+
+  const char* title;
+  const char* unit;
+  uint16_t color;
+  float* values;
+
+  switch (selectedHistoryMetric) {
+    case HISTORY_HUMIDITY:
+      title = "Humidity"; unit = "%";    color = TFT_GREEN;   values = humidityHistoryPct; break;
+    case HISTORY_PRESSURE:
+      title = "Pressure"; unit = "hPa";  color = TFT_ORANGE;  values = pressureHistoryHpa; break;
+    case HISTORY_WIND:
+      title = "Wind";     unit = "km/h"; color = TFT_MAGENTA; values = windHistoryKmh;     break;
+    case HISTORY_RAIN:
+    default:
+      title = "Rain";     unit = "cm";   color = TFT_CYAN;    values = rainHistoryCm;      break;
+  }
+
+  tft.setTextColor(TFT_WHITE, TFT_BLACK);
+  tft.setTextSize(2);
+  tft.setCursor(10, 4);
+  tft.printf("%s (%s) - last %dh", title, unit, WEATHER_HISTORY_HOURS);
+
+  if (!weatherHistoryValid || weatherHistoryCount == 0) {
+    tft.setTextColor(TFT_RED, TFT_BLACK);
+    tft.setTextSize(2);
+    tft.setCursor(10, 60);
+    tft.println("No data available");
+    return;
+  }
+
+  float minVal = values[0];
+  float maxVal = values[0];
+  for (int i = 1; i < weatherHistoryCount; i++) {
+    if (values[i] < minVal) minVal = values[i];
+    if (values[i] > maxVal) maxVal = values[i];
+  }
+  float range = maxVal - minVal;
+  if (range < 0.01f) range = 0.01f; // guards against a perfectly flat line
+  float pad = range * 0.15f;
+  minVal -= pad;
+  maxVal += pad;
+  range = maxVal - minVal;
+
+  int chartLeft   = 55;
+  int chartRight  = tft.width() - 10;
+  int chartTop    = 34;
+  int chartBottom = tft.height() - 30;
+  int chartHeight = chartBottom - chartTop;
+  int chartWidth  = chartRight - chartLeft;
+
+  // Y axis labels + faint gridlines, 4 steps.
+  tft.setTextSize(1);
+  for (int step = 0; step <= 3; step++) {
+    float val = minVal + range * step / 3.0f;
+    int y = chartBottom - (step * chartHeight / 3);
+    tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+    tft.setCursor(2, y - 4);
+    tft.printf("%.2f", val);
+    tft.drawFastHLine(chartLeft, y, chartWidth, tft.color565(30, 30, 30));
+  }
+
+  // Points, connected by lines.
+  int slotWidth = (weatherHistoryCount > 1) ? chartWidth / (weatherHistoryCount - 1) : chartWidth;
+  int prevX = -1, prevY = -1;
+  for (int i = 0; i < weatherHistoryCount; i++) {
+    int x = chartLeft + i * slotWidth;
+    int y = chartBottom - (int)(((values[i] - minVal) / range) * chartHeight);
+
+    if (prevX >= 0) {
+      tft.drawLine(prevX, prevY, x, y, color);
+    }
+    tft.fillCircle(x, y, 3, color);
+
+    if (weatherHistoryCount <= 8 || i % 2 == 0) {
+      tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+      tft.setCursor(x - 8, chartBottom + 4);
+      tft.print(weatherHistoryTime[i]);
+    }
+
+    prevX = x;
+    prevY = y;
+  }
+
+  tft.drawFastHLine(chartLeft, chartBottom, chartWidth, TFT_WHITE);
 }
 
 // -----------------------------------------------------------------
