@@ -72,6 +72,7 @@
 #include "ephemeris.h"
 #include "moon.h"
 #include "kite_alert.h"
+#include "weather_history.h"
 #include "display.h"
 
 // ---------- Hardware / library objects ----------
@@ -91,6 +92,16 @@ float currentWindSpeed = 0;
 WeatherIconType currentWeatherIcon = ICON_CLEAR;
 String currentWeatherTime = "";
 bool  weatherDataValid = false;
+
+// ---------- Weather history state (Rain/Humidity/Pressure/Wind graphs) ----------
+float  rainHistoryCm[WEATHER_HISTORY_MAX_POINTS];
+float  humidityHistoryPct[WEATHER_HISTORY_MAX_POINTS];
+float  pressureHistoryHpa[WEATHER_HISTORY_MAX_POINTS];
+float  windHistoryKmh[WEATHER_HISTORY_MAX_POINTS];
+String weatherHistoryTime[WEATHER_HISTORY_MAX_POINTS];
+int    weatherHistoryCount = 0;
+bool   weatherHistoryValid = false;
+HistoryMetric selectedHistoryMetric = HISTORY_RAIN;
 
 // ---------- Ephemeris state ----------
 const char* EPHEMERIS_BODIES[NUM_EPHEMERIS_BODIES] = {
@@ -326,6 +337,19 @@ void loop() {
       Serial.println(touchY);
       if (currentScreen == SCREEN_MENU) {
         selectMenuRow(menuRowFromY(touchY));
+      } else if (currentScreen == SCREEN_CURRENT &&
+                 getTappedHistoryRow(touchY, selectedHistoryMetric)) {
+        // Tapping Humidity/Rain/Pressure/Wind drills into a 4-hour
+        // point graph of that stat, fetched fresh from Open-Meteo on
+        // every visit.
+        currentScreen = SCREEN_HISTORY;
+        tft.fillScreen(TFT_BLACK);
+        tft.setTextColor(TFT_WHITE, TFT_BLACK);
+        tft.setTextSize(2);
+        tft.setCursor(10, 10);
+        tft.println("Fetching history...");
+        weatherHistoryValid = fetchWeatherHistory();
+        redrawCurrentScreen();
       } else {
         currentScreen = SCREEN_MENU;
         drawMenu();
