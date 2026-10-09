@@ -79,8 +79,22 @@ enum WeatherIconType {
 enum AppScreen {
   SCREEN_MENU,
   SCREEN_EPHEMERIS,
-  SCREEN_CURRENT
+  SCREEN_CURRENT,
+  SCREEN_HISTORY
 };
+
+// Which stat the shared history screen is currently plotting - set right
+// before switching to SCREEN_HISTORY, based on which row was tapped.
+enum HistoryMetric {
+  HISTORY_RAIN,
+  HISTORY_HUMIDITY,
+  HISTORY_PRESSURE,
+  HISTORY_WIND
+};
+
+// ---------- Weather history (Rain/Humidity/Pressure/Wind graphs) ----------
+#define WEATHER_HISTORY_HOURS 4
+#define WEATHER_HISTORY_MAX_POINTS 12 // one point per hour from Open-Meteo; 4 is typical, room to spare
 
 // ---------- Weather state ----------
 extern float currentTemp;
@@ -91,6 +105,16 @@ extern float currentWindSpeed;     // km/h (converted from the METAR's knots)
 extern WeatherIconType currentWeatherIcon;
 extern String currentWeatherTime;  // the METAR's own reportTime string
 extern bool  weatherDataValid;     // false until the first successful fetch
+
+// ---------- Weather history state (shared by Rain/Humidity/Pressure/Wind) ----------
+extern float  rainHistoryCm[WEATHER_HISTORY_MAX_POINTS];       // hourly rainfall, cm
+extern float  humidityHistoryPct[WEATHER_HISTORY_MAX_POINTS];  // hourly relative humidity, %
+extern float  pressureHistoryHpa[WEATHER_HISTORY_MAX_POINTS];  // hourly sea-level pressure, hPa
+extern float  windHistoryKmh[WEATHER_HISTORY_MAX_POINTS];      // hourly wind speed, km/h
+extern String weatherHistoryTime[WEATHER_HISTORY_MAX_POINTS];  // "HH:MM" label per point (Da Nang local)
+extern int    weatherHistoryCount;
+extern bool   weatherHistoryValid;
+extern HistoryMetric selectedHistoryMetric; // which of the 4 arrays above the history screen plots
 
 // ---------- Ephemeris state ----------
 extern const char* EPHEMERIS_BODIES[NUM_EPHEMERIS_BODIES];
@@ -129,6 +153,8 @@ extern const char* NTP_SERVER3;
 // needs its prototype declared here.
 bool fetchWeather();                 // weather.h    - called from location.h, main .ino
 bool fetchEphemeris();               // ephemeris.h  - called from display.h, main .ino
+bool fetchWeatherHistory();          // weather_history.h - called from main .ino
+bool getTappedHistoryRow(uint16_t y, HistoryMetric &outMetric); // display.h - called from main .ino
 void checkKiteWindAlert();           // kite_alert.h - called from weather.h
 bool computeMoonPhase(float &outAgeDays, const char* &outPhaseName); // moon.h - called from display.h
 void drawMoonPhaseIcon(int cx, int cy, int r, float ageDays);        // moon.h - called from display.h
